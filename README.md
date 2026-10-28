@@ -27,7 +27,9 @@ Cell Pet is open-source firmware for the **ESP32-2432S028R**, the 2.8" "Cheap Ye
 
 ## Get one
 
-- **Ready to plug in:** a 2.8" CYD with Cell Pet already on it is at **[jmscnc.com](https://jmscnc.com/product/cell-pet-a-living-desk-pet-on-a-2-8-touchscreen-ready-to-plug-in/)**. Plug it into any USB charger.
+[![Cell Pet on a 2.8" CYD in its case, with stylus and USB cable](docs/media/cellpet-cyd.jpg)](https://jmscnc.com/product/cell-pet-a-living-desk-pet-on-a-2-8-touchscreen-ready-to-plug-in/)
+
+- **Ready to plug in:** a 2.8" CYD in an acrylic case with Cell Pet already on it, plus a stylus and a USB cable, is at **[jmscnc.com](https://jmscnc.com/product/cell-pet-a-living-desk-pet-on-a-2-8-touchscreen-ready-to-plug-in/)**. Plug it into any USB charger.
 - **Flash your own:** any ESP32-2432S028R works, with an ILI9341 or ST7789 panel; the firmware detects which.
 
 ```
