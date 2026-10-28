@@ -262,7 +262,7 @@ static void settings() {
 }
 
 // ---------------------------------------------------------------- serial
-// i info, S screenshot (SHOT, u16 w, u16 h, then RGB888 rows), T x y a tap,
+// i info, L the light sensor, S screenshot (SHOT, u16 w, u16 h, then RGB888 rows), T x y a tap,
 // M the settings (as if held 2 s).
 // Debug only, never on screen: + six hours of evolving, n next stage, t traits,
 // r a new drop, w a fast round one, h hold round one (no crowning),
@@ -284,6 +284,11 @@ static void serialCommands() {
                 break;
             }
             case 'S': renderShot(); break;
+            case 'L': {  // the light sensor, raw, and what the pond makes of it
+                int raw = analogRead(34);
+                Serial.printf("light: raw %d (0 lit, about %d dark), %.2f\n", raw, evo::LIGHT_DARK, evo::roomLight(raw));
+                break;
+            }
             case 'P': {  // P0 the settings, P1 the about screen, sent like S
                 int        which = Serial.parseInt();
                 LGFX_Sprite band(&tft);

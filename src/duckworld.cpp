@@ -117,6 +117,7 @@ struct Ducks {
         } else
             startRoundOne();
         pinMode(34, INPUT);  // the light sensor on the front of the board
+        analogSetPinAttenuation(34, ADC_0db);  // its most sensitive range: this sensor only swings a few hundred mV
         last = saveMs = tallyMs = castMs = turtleMs = millis();
         for (int p = 0; p < 3; p++) preyAt[p] = last + duck::preyDelayMs((duck::Prey)p, light, rng) / 3;
         quipAt = last + quipDelayMs(rng);
@@ -510,7 +511,7 @@ struct Ducks {
         evo::tick(clock, now);
         if (now - lightMs > 250) {
             lightMs = now;
-            float l = 1.0f - min((int)analogRead(34), 3000) / 3000.0f;  // higher in the dark on this board
+            float l = evo::roomLight(analogRead(34));
             light += (0.25f + 0.75f * l - light) * 0.1f;
         }
         time_t    tt = frozen ? epochAtFreeze + (time_t)((virt - virtStart) / 1000) : time(nullptr);

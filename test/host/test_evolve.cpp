@@ -57,6 +57,15 @@ static void testLightCountsDaytimeOnly() {
     CHECK(t.lightN == 3);
 }
 
+static void testLightFromSensor() {
+    CHECK(roomLight(0) == 1.0f);           // shop lights on: the sensor bottoms out at 0
+    CHECK(roomLight(LIGHT_DARK) == 0.0f);  // nearly dark, as measured on a real board
+    CHECK(roomLight(4095) == 0.0f);        // darker than that still counts as dark
+    CHECK(roomLight(-5) == 1.0f);
+    CHECK_NEAR(roomLight(LIGHT_DARK / 2), 0.5, 0.01);
+    CHECK(LIGHT_DARK >= 1800 && LIGHT_DARK <= 2600);
+}
+
 static void testFightTally() {
     Tally t{};
     CHECK_NEAR(tallyTraits(t).hunt, -1, 1e-6);  // never fought: pure grazer
@@ -395,6 +404,7 @@ int main() {
     testTickSurvivesMillisWrap();
     testPausedAddsNothing();
     testLightCountsDaytimeOnly();
+    testLightFromSensor();
     testFightTally();
     testFeedTally();
     testLockInWeighsLaterStagesMore();

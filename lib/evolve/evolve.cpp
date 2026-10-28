@@ -41,6 +41,12 @@ static uint32_t xorshift(uint32_t& s) {
 }
 static float unit(uint32_t& s) { return (xorshift(s) & 0xFFFFFF) / (float)0xFFFFFF; }  // 0..1
 
+float roomLight(int raw) {
+    if (raw <= 0) return 1;
+    if (raw >= LIGHT_DARK) return 0;
+    return 1 - (float)raw / LIGHT_DARK;
+}
+
 Genome randomGenome(uint32_t& rng) {
     Genome g;
     g.lean  = {unit(rng) * 2 - 1, unit(rng) * 2 - 1, unit(rng) * 2 - 1};

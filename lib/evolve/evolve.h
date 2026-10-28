@@ -22,6 +22,12 @@ uint32_t tick(Clock& c, uint32_t nowMs);  // seconds added by this call
 int      stageFor(uint32_t evolveSecs);   // 1..5
 float    stageProgress(uint32_t evolveSecs);
 
+// the light sensor on the front (GPIO 34), read at 0 dB, the most sensitive range:
+// 0 in a lit room, rising to about LIGHT_DARK when nearly dark. It can't see a lamp
+// being dimmed, only lights on or nearly off.
+constexpr int LIGHT_DARK = 2200;
+float         roomLight(int raw);  // 0 dark .. 1 lit
+
 // three body leanings, each -1..1: + is bright / hunter / plump, - is glow / grazer / sleek
 struct Traits {
     float sun, hunt, plump;

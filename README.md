@@ -87,6 +87,7 @@ Serial is at 921600 baud.
 
 - **Everyday commands:**
   - `i` shows frame rate and memory.
+  - `L` shows the light sensor: 0 in a lit room, up to about 2200 when nearly dark. It can't see a lamp being dimmed, only lights on or nearly off.
   - `t` shows the pet's traits and care tallies.
   - `T x y` is a tap at x, y.
   - `M` opens the settings.

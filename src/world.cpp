@@ -110,6 +110,7 @@ struct World {
         } else
             startRoundOne();
         pinMode(34, INPUT);  // the light sensor on the front of the board
+        analogSetPinAttenuation(34, ADC_0db);  // its most sensitive range: this sensor only swings a few hundred mV
         last = saveMs = tallyMs = millis();
         rng    = esp_random();
         quipAt = last + quipDelayMs(rng);
@@ -412,8 +413,7 @@ struct World {
         // light sensor: brighter room, brighter microscope lamp, faster algae
         if (now - lightMs > 250) {
             lightMs = now;
-            int   raw = analogRead(34);  // higher in the dark on this board
-            float l   = 1.0f - min(raw, 3000) / 3000.0f;
+            float l = evo::roomLight(analogRead(34));
             light += (0.25f + 0.75f * l - light) * 0.1f;
         }
         time_t    tt = frozen ? epochAtFreeze + (time_t)((virt - virtStart) / 1000) : time(nullptr);
