@@ -14,8 +14,15 @@
 #include "pet.h"
 #include "render.h"
 #include "led.h"
-#include "world.h"
+#include "pond.h"
 #include "font8x16.h"
+
+#ifndef PET_DEFAULT
+#define PET_DEFAULT 0  // 0 Cell Pet, 1 Duck Pet
+#endif
+#ifndef PET_SWITCH
+#define PET_SWITCH 0  // 1: a PET: CELL / DUCK setting picks between them
+#endif
 
 bool kbdType(const char* title, String& text, int maxLen, const char* hint);  // wifikbd.cpp
 
@@ -23,16 +30,28 @@ namespace cp {
 
 const uint8_t* font16 = vga_font8x16;
 TouchState     touch;
+Kind           petKind = Kind::Cell;
+bool           splatterRed = true;
 bool           deskClock = true;
 
 static Preferences prefs;
 static uint32_t    updateUs, steps, statMs;
 
 // ---------------------------------------------------------------- settings
+#if PET_SWITCH
+// the other pet: this one is saved first, each keeps its own save, and the board restarts into it
+static void switchPet(Kind k) {
+    if (k == petKind) return;
+    pond().save();
+    prefs.putUChar("kind", k == Kind::Duck ? 1 : 0);
+    delay(50);
+    ESP.restart();
+}
+#endif
 #ifdef CELLPET_IN_DEMOSCENE
 // back to CYD Demoscene: the clock's STAY ON goes off and the board restarts into the demos
 static void backToDemos() {
-    worldSave();
+    pond().save();
     Preferences c;
     c.begin("clock");
     c.putUChar("stayto", 0);
@@ -89,7 +108,11 @@ static void tap(int& x, int& y) {
     delay(30);
 }
 
-constexpr int ROW = 32, TOP = 30;
+constexpr int TOP = 30;
+// a seventh row (SPLATTER for the duck, PET when both pets are built in) squeezes the rows a little
+static bool extraRow() { return petKind == Kind::Duck || PET_SWITCH; }
+static int  rowH() { return extraRow() ? 28 : 32; }
+static bool duck() { return petKind == Kind::Duck; }
 constexpr int ABOUT_X = SW - 212, ABOUT_W = 68;  // in the title bar, left of DEMOS and DONE
 
 // who made it and where to find more
@@ -98,14 +121,14 @@ static void drawAbout() {
     C.fillRect(0, 0, SW, 26, 0x0329);
     C.setTextSize(1);
     C.setTextColor(TFT_WHITE, 0x0329);
-    C.drawString("ABOUT CELL PET", 6, 9);
+    C.drawString(duck() ? "ABOUT DUCK PET" : "ABOUT CELL PET", 6, 9);
     C.setTextSize(2);
-    C.setTextColor(0x6FFB, TFT_BLACK);  // the pet's teal
-    C.drawString("CELL PET 1.0", 8, 36);
+    C.setTextColor(duck() ? 0xFEA0 : 0x6FFB, TFT_BLACK);  // duckling yellow, or the cell's teal
+    C.drawString(duck() ? "DUCK PET 1.0" : "CELL PET 1.0", 8, 36);
     C.setTextSize(1);
     C.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-    C.drawString("A living drop of pond water under a microscope.", 8, 58);
-    C.drawString("Nature picks your pet. Raise it into a jellyfish.", 8, 70);
+    C.drawString(duck() ? "Glossy toy ducklings on a pond." : "A living drop of pond water under a microscope.", 8, 58);
+    C.drawString(duck() ? "Nature picks yours. Raise it into a duck." : "Nature picks your pet. Raise it into a jellyfish.", 8, 70);
     C.setTextColor(TFT_WHITE, TFT_BLACK);
     C.drawString("Made by Rev. J. Money", 8, 90);
     C.setTextSize(2);
@@ -138,28 +161,33 @@ static void drawSettings() {
     C.setTextSize(1);
     C.fillRect(0, 0, SW, 26, 0x0329);
     C.setTextColor(TFT_WHITE, 0x0329);
-    C.drawString("CELL PET SETTINGS", 6, 9);
+    C.drawString(duck() ? "DUCK PET SETTINGS" : "CELL PET SETTINGS", 6, 9);
     button(SW - 64, 0, 64, 26, "DONE", TFT_WHITE, 0x0460);
     button(ABOUT_X, 0, ABOUT_W, 26, "ABOUT", TFT_WHITE, 0x4208);
 #ifdef CELLPET_IN_DEMOSCENE
     button(SW - 140, 0, 72, 26, "DEMOS", TFT_WHITE, 0x4208);  // back to CYD Demoscene
 #endif
     snprintf(s, sizeof s, "DESK CLOCK: %s", deskClock ? "ON (big time, date, weather)" : "OFF");
-    button(0, TOP, SW, ROW, s);
+    button(0, TOP, SW, rowH(), s);
     snprintf(s, sizeof s, "<   TIME ZONE: %s   >", netTzName(netTz()));
-    button(0, TOP + ROW, SW, ROW, s);
-    bool paused = worldData().paused;
-    button(0, TOP + ROW * 2, SW, ROW, paused ? "EVOLVING: PAUSED (tap to resume)" : "EVOLVING: ON (tap to pause)", paused ? TFT_YELLOW : TFT_WHITE);
+    button(0, TOP + rowH(), SW, rowH(), s);
+    bool paused = pond().data().paused;
+    button(0, TOP + rowH() * 2, SW, rowH(), paused ? "EVOLVING: PAUSED (tap to resume)" : "EVOLVING: ON (tap to pause)", paused ? TFT_YELLOW : TFT_WHITE);
     String zip = netZip();
     if (C.g != &tft) zip = "";  // a screenshot never shows where the owner lives
     snprintf(s, sizeof s, "WEATHER ZIP: %s", zip.length() ? zip.c_str() : "OFF (tap to set)");
-    button(0, TOP + ROW * 3, SW, ROW, s);
-    button(0, TOP + ROW * 4, SW / 2, ROW, "WIFI: TYPE PASSWORD");
-    button(SW / 2, TOP + ROW * 4, SW / 2, ROW, "WIFI: ROUTER WPS");
-    button(0, TOP + ROW * 5, SW / 2, ROW, "SET THE CLOCK NOW");
-    button(SW / 2, TOP + ROW * 5, SW / 2, ROW, "GENESIS (NEW DROP)", TFT_WHITE, 0x6000);
+    button(0, TOP + rowH() * 3, SW, rowH(), s);
+    button(0, TOP + rowH() * 4, SW / 2, rowH(), "WIFI: TYPE PASSWORD");
+    button(SW / 2, TOP + rowH() * 4, SW / 2, rowH(), "WIFI: ROUTER WPS");
+    button(0, TOP + rowH() * 5, SW / 2, rowH(), "SET THE CLOCK NOW");
+    button(SW / 2, TOP + rowH() * 5, SW / 2, rowH(), duck() ? "GENESIS (NEW CLUTCH)" : "GENESIS (NEW DROP)", TFT_WHITE, 0x6000);
+    if (duck()) button(0, TOP + rowH() * 6, SW / 2, rowH(), splatterRed ? "SPLATTER: RED" : "SPLATTER: FEATHERS");
+#if PET_SWITCH
+    button(SW / 2, TOP + rowH() * 6, SW / 2, rowH(), duck() ? "PET: DUCK  (> CELL)" : "PET: CELL  (> DUCK)", TFT_WHITE, 0x2A6A);
+#endif
     C.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    C.drawString("Tap water: feed. Tap rival: bop. Tap pet: cheer.", 4, TOP + ROW * 6 + 6);
+    C.drawString(duck() ? "Tap water: peas. Evil duck: bop. Your duck: cheer." : "Tap water: feed. Tap rival: bop. Tap pet: cheer.", 4,
+                 TOP + rowH() * (extraRow() ? 7 : 6) + (extraRow() ? 2 : 6));
 }
 
 // GENESIS asks first: the pet is gone for good after this
@@ -167,11 +195,11 @@ static bool confirmGenesis() {
     C.fillScreen(TFT_BLACK);
     C.setTextSize(2);
     C.setTextColor(TFT_ORANGE, TFT_BLACK);
-    C.drawString("START A NEW DROP?", 8, 70);
+    C.drawString(duck() ? "START A NEW CLUTCH?" : "START A NEW DROP?", 8, 70);
     C.setTextSize(1);
     C.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
     C.drawString("Your pet will be gone for good.", 8, 100);
-    C.drawString("The drop starts over with 8 random cells.", 8, 114);
+    C.drawString(duck() ? "The pond starts over with 8 new ducklings." : "The drop starts over with 8 random cells.", 8, 114);
     button(0, 180, SW / 2, 60, "KEEP MY PET", TFT_WHITE, 0x0460);
     button(SW / 2, 180, SW / 2, 60, "START OVER", TFT_WHITE, 0x8000);
     int x, y;
@@ -186,7 +214,7 @@ static void settings() {
     for (drawSettings();; drawSettings()) {
         int x, y;
         tap(x, y);
-        int row = (y - TOP) / ROW;
+        int row = (y - TOP) / rowH();
         if (y < 26) {
             if (x >= SW - 64) break;
             if (x >= ABOUT_X && x < ABOUT_X + ABOUT_W) about();
@@ -199,26 +227,34 @@ static void settings() {
         } else if (row == 1) {
             netSetTz(netTz() + (x < SW / 2 ? -1 : 1));
         } else if (row == 2) {
-            worldPause(!worldData().paused);
+            pond().pause(!pond().data().paused);
         } else if (row == 3) {
             String zip = netZip();
             if (kbdType("WEATHER ZIP CODE", zip, 5, "US ZIP, blank turns weather off")) {
                 netSetZip(zip);
-                worldSave();
+                pond().save();
                 netRequestSync();  // reboots and fetches it
             }
         } else if (row == 4) {
-            worldSave();
+            pond().save();
             if (x < SW / 2) netRequestKeyboard();
             else netRequestWps();
         } else if (row == 5) {
             if (x < SW / 2) {
-                worldSave();
+                pond().save();
                 netRequestSync();
             } else if (confirmGenesis()) {
-                worldGenesis();
+                pond().genesis();
                 break;
             }
+        } else if (row == 6 && extraRow()) {
+            if (x < SW / 2 && duck()) {
+                splatterRed = !splatterRed;
+                prefs.putUChar("splat", splatterRed ? 0 : 1);
+            }
+#if PET_SWITCH
+            if (x >= SW / 2) switchPet(duck() ? Kind::Cell : Kind::Duck);
+#endif
         }
     }
     touch = {};
@@ -253,7 +289,8 @@ static void serialCommands() {
                 LGFX_Sprite band(&tft);
                 band.setColorDepth(16);
                 if (!band.createSprite(SW, 40)) break;
-                static uint8_t line[SW * 3];
+                uint8_t* line = (uint8_t*)malloc(SW * 3);  // only while it's sending (inside CYD Demoscene the demos keep the memory)
+                if (!line) break;
                 Serial.write("SHOT", 4);
                 uint16_t wh[2] = {SW, SH};
                 Serial.write((uint8_t*)wh, 4);
@@ -267,20 +304,24 @@ static void serialCommands() {
                             uint16_t c = band.readPixel(x, y);
                             line[x * 3] = (c >> 8) & 0xF8, line[x * 3 + 1] = (c >> 3) & 0xFC, line[x * 3 + 2] = (c << 3) & 0xF8;
                         }
-                        Serial.write(line, sizeof line);
+                        Serial.write(line, SW * 3);
                     }
                 }
+                free(line);
                 C.g = &tft, C.oy = 0;
                 band.deleteSprite();
                 break;
             }
-#ifdef CELLPET_IN_DEMOSCENE
-            case '@': {  // "@STAY 0" or "@STAY 1", as in CYD Demoscene: leave the pet for the demos or the clock
+            case '@': {  // "@KIND 0|1" picks the pet (PET_SWITCH builds); in CYD Demoscene, "@STAY 0|1" leaves for the demos or the clock
                 String l = Serial.readStringUntil('\n');
                 l.trim();
+#if PET_SWITCH
+                if (l == "KIND 0" || l == "KIND 1") switchPet(l[5] == '1' ? Kind::Duck : Kind::Cell);
+#endif
+#ifdef CELLPET_IN_DEMOSCENE
                 if (l == "STAY 0") backToDemos();
                 if (l == "STAY 1") {
-                    worldSave();
+                    pond().save();
                     Preferences c;
                     c.begin("clock");
                     c.putUChar("stayto", 1);
@@ -288,9 +329,9 @@ static void serialCommands() {
                     c.end();
                     ESP.restart();
                 }
+#endif
                 break;
             }
-#endif
             case 'M': settings(); break;
             case 'T':
                 serialTapX = Serial.parseInt();
@@ -305,10 +346,14 @@ static void serialCommands() {
             case 'q':
             case 'Z':
             case 'K':
-            case '.': worldDebug(c); break;
+            case '.':
+            case 'E':
+            case 'N':
+            case 'V':
+            case 'X': pond().debug(c); break;
             case 'F': {
                 float sun = Serial.parseFloat(), hunt = Serial.parseFloat(), plump = Serial.parseFloat();
-                worldForce(sun, hunt, plump);
+                pond().force(sun, hunt, plump);
                 break;
             }
         }
@@ -351,8 +396,8 @@ static void petLoop() {
     ledUpdate();
     readTouch();
     uint32_t u = micros();
-    if (touch.pressed) touch.pressed = false, worldTap(touch.x, touch.y);
-    worldStep(millis() - t0);
+    if (touch.pressed) touch.pressed = false, pond().tap(touch.x, touch.y);
+    pond().step(millis() - t0);
     updateUs += micros() - u;
     steps++;
     if (!statMs) statMs = millis();
@@ -366,11 +411,17 @@ void petMain() {
     ledInit();
     prefs.begin("cellpet");
     deskClock = prefs.getBool("desk", true);
+    splatterRed = prefs.getUChar("splat", 0) == 0;
+#if PET_SWITCH
+    petKind = prefs.getUChar("kind", PET_DEFAULT) ? Kind::Duck : Kind::Cell;
+#else
+    petKind = PET_DEFAULT ? Kind::Duck : Kind::Cell;
+#endif
     tft.setRotation(1);  // the drop is landscape
     renderInit();  // the display strips before WiFi, so the radio can't fragment the space they need
     netSyncAtBoot();
-    Serial.printf("\nCell Pet, heap left %u (max block %u)\n", ESP.getFreeHeap(), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    worldBegin();
+    Serial.printf("\n%s, heap left %u (max block %u)\n", duck() ? "Duck Pet" : "Cell Pet", ESP.getFreeHeap(), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    pond().begin();
     renderTaskStart();
     for (;;) petLoop();
 }

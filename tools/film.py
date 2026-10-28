@@ -23,26 +23,43 @@ s.dtr = s.rts = False
 s.open()
 
 
+frozen = False
+
+
 def cmd(c, wait=0.4):
+    global frozen
+    if c == b"Z":
+        frozen = not frozen
     s.write(c)
     time.sleep(wait)
     s.reset_input_buffer()
 
 
-def grab(path, what=b"S"):
-    s.reset_input_buffer()
-    s.write(what)
-    buf = b""
-    while b"SHOT" not in buf:
-        ch = s.read(1)
-        if not ch:
-            raise SystemExit("no SHOT header")
-        buf = (buf + ch)[-4:]
-    w, h = struct.unpack("<HH", s.read(4))
-    raw = b""
-    while len(raw) < w * h * 3:
-        raw += s.read(w * h * 3 - len(raw))
-    Image.frombytes("RGB", (w, h), raw).save(path)
+def grab(path, what=b"S", tries=3):
+    for _ in range(tries):
+        s.reset_input_buffer()
+        s.write(what)
+        buf = b""
+        while b"SHOT" not in buf:
+            ch = s.read(1)
+            if not ch:
+                break
+            buf = (buf + ch)[-4:]
+        else:
+            w, h = struct.unpack("<HH", s.read(4))
+            raw = b""
+            while len(raw) < w * h * 3:
+                got = s.read(w * h * 3 - len(raw))
+                if not got:  # a dropped byte would otherwise wait forever with the pond frozen
+                    break
+                raw += got
+            if len(raw) == w * h * 3:
+                Image.frombytes("RGB", (w, h), raw).save(path)
+                return
+        time.sleep(1)
+    if frozen:
+        s.write(b"Z")  # don't leave the pond frozen
+    raise SystemExit("screenshot failed: " + path)
 
 
 def film(name, frames):

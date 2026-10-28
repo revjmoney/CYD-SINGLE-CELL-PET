@@ -25,6 +25,30 @@ Cell Pet is open-source firmware for the **ESP32-2432S028R**, the 2.8" "Cheap Ye
 
 ![the five stages and two very different jellyfish](docs/media/stages.png)
 
+## Duck Pet
+
+**Glossy toy ducklings on a pond.** The same firmware has a second pet: ducklings that look a little like rubber duckies, paddling around a pond that fills the whole screen. Round one picks your duckling from a clutch of eight. It grows over about a week (fuzzball, fluffy, pin feathers, young duck, grown duck), and the way you raise it shapes it, just like Cell Pet.
+
+![Duck Pet running on a CYD](docs/media/duckpet.gif)
+
+- **The same care rules:**
+  - Room light: a sunny duck, or a pale moonlit one that sparkles at night.
+  - Squabbles: a bossy duck with a crest, or a sweet one with big eyes and a blush.
+  - Feeding: chubby or sleek.
+- **Duck stuff:** paddling, dabbling (tail up!), preening, quacking, splashing, and napping with its head tucked in at night.
+- **Live prey turns up now and then:** bugs skitter, frogs hop in off the lily pads, and goldfish glint under the surface. Ducks chase them down. A turtle paddles across once in a while.
+- **Evil ducklings.** A duckling is rarely born evil: dark feathers, a scowl and one glowing red eye. It hunts the others and eats them, unless a brave duckling gets the 12% upset and bonks it into a puff of feathers. About 3% of pets turn out evil and stay that way, with their own villain achievements. Your duck never dies: if an evil one gets it, it flees hurt and recovers. The **SPLATTER** setting picks red or feathers only.
+- **Tapping:**
+  - The water: toss peas and oats.
+  - An evil duckling: bop it.
+  - Any other duckling: startle it.
+  - Your duck: cheer it on.
+- **The rest works like Cell Pet:** 150 silly duck achievements, the LED, the desk clock, pause and GENESIS (a new clutch).
+
+| The ducks by stage | Settings | About |
+|---|---|---|
+| ![Duck Pet stages and looks](docs/media/duck-stages.png) | ![Duck Pet settings](docs/media/duck-settings.png) | ![Duck Pet about](docs/media/duck-about.png) |
+
 ## Get one
 
 [![Cell Pet on a 2.8" CYD in its case, with stylus and USB cable](docs/media/cellpet-cyd.jpg)](https://jmscnc.com/product/cell-pet-a-living-desk-pet-on-a-2-8-touchscreen-ready-to-plug-in/)
@@ -32,9 +56,13 @@ Cell Pet is open-source firmware for the **ESP32-2432S028R**, the 2.8" "Cheap Ye
 - **Ready to plug in:** a 2.8" CYD in an acrylic case with Cell Pet already on it, plus a stylus and a USB cable, is at **[jmscnc.com](https://jmscnc.com/product/cell-pet-a-living-desk-pet-on-a-2-8-touchscreen-ready-to-plug-in/)**. Plug it into any USB charger.
 - **Flash your own:** any ESP32-2432S028R works, with an ILI9341 or ST7789 panel; the firmware detects which.
 
-```
-pio run -t upload
-```
+There are three builds:
+
+| Build | What's on it | Command |
+|---|---|---|
+| `cyd` | Cell Pet | `pio run -e cyd -t upload` |
+| `duck` | Duck Pet | `pio run -e duck -t upload` |
+| `both` | both, with a **PET: CELL / DUCK** setting (each pet keeps its own save) | `pio run -e both -t upload` |
 
 You need [PlatformIO](https://platformio.org/). The SD card slot is never touched, so whatever is on the card is safe.
 
@@ -70,6 +98,8 @@ Serial is at 921600 baud.
   - `w` speeds up round one, `h` holds it, and `r` starts a new drop.
   - `q` shows the next achievement.
   - `F sun hunt plump` forces how the body looks (not saved).
+  - Duck Pet only: `E` makes the nearest duckling evil, `V` makes your duck evil (or not), `N` forces night, and `X` brings prey and the turtle right away.
+  - `@KIND 0` or `@KIND 1` switches pets on a `both` build.
 - **Filming:**
   - `Z` freezes the pond, and `.` steps it 50 ms.
   - `python tools/film.py COM17 outdir` uses that to capture frames that play back at true speed.
@@ -77,9 +107,9 @@ Serial is at 921600 baud.
 How it works:
 
 - **Rendering:** `src/render.cpp` draws each 16-line strip straight from a snapshot of the pond, so no full frame ever sits in memory. Core 0 draws the even strips and sends every strip to the panel by DMA, while a helper on core 1 draws the odd ones.
-- **The pond:** `src/world.cpp` simulates the drop on core 1.
-- **Evolution rules:** these live in `lib/evolve/` as plain C++ with host tests (`powershell -File tools\test.ps1`, needs MSVC `cl`). That covers the stage clock, care tallies, the checksummed save, and the achievement picker.
-- **Achievements:** the lines live in `docs/achievements.md`. `python tools/make_quips.py` turns them into code.
+- **The pond:** `src/world.cpp` simulates Cell Pet's drop and `src/duckworld.cpp` Duck Pet's pond, on core 1. `src/pond.cpp` picks one at boot. The ducks are drawn in `src/ducks.inc`, the cells in `src/bodies.inc`.
+- **Evolution rules:** these live in `lib/evolve/` as plain C++ with host tests (`powershell -File tools\test.ps1`, needs MSVC `cl`). That covers the stage clock, care tallies, the checksummed save, the achievement picker, and Duck Pet's odds (`duckrules.*`).
+- **Achievements:** the lines live in `docs/achievements.md` (Cell Pet) and `docs/achievements-duck.md` (Duck Pet). `python tools/make_quips.py` (add `--duck` for the ducks) turns them into code.
 - **Saving:** the pet is saved to flash every minute and at every big moment, with a checksum, so a power cut never loses it.
 
 ## Credits

@@ -3,6 +3,10 @@
 #include "quips.h"
 #include <string.h>
 #include "quips_data.h"
+#include "quips_duck_data.h"
+
+const QuipBook cellBook = {cell_pools, cell_sizes, 6, cell_events, sizeof cell_events / sizeof cell_events[0]};
+const QuipBook duckBook = {duck_pools, duck_sizes, 7, duck_events, sizeof duck_events / sizeof duck_events[0]};
 
 static uint32_t next(uint32_t& s) {
     if (!s) s = 0x2545F491u;
@@ -14,15 +18,16 @@ static uint32_t gcd(uint32_t a, uint32_t b) {
     return a;
 }
 
-int quipPool(int stage, bool havePet) {
+int quipPool(int stage, bool havePet, bool villain) {
     if (!havePet) return 0;
-    return stage < 1 ? 1 : stage >= QUIP_POOLS ? QUIP_POOLS - 1 : stage;
+    if (villain) return 6;
+    return stage < 1 ? 1 : stage > 5 ? 5 : stage;
 }
-int         quipCount(int pool) { return pool >= 0 && pool < QUIP_POOLS ? poolSizes[pool] : 0; }
-const char* quipLine(int pool, int i) { return pools[pool][i]; }
+int         quipCount(const QuipBook& b, int pool) { return pool >= 0 && pool < b.nPools ? b.sizes[pool] : 0; }
+const char* quipLine(const QuipBook& b, int pool, int i) { return b.pools[pool][i]; }
 
-const char* quipPick(int pool, uint32_t& order, uint16_t& pos, uint32_t& rng) {
-    uint32_t n = quipCount(pool);
+const char* quipPick(const QuipBook& b, int pool, uint32_t& order, uint16_t& pos, uint32_t& rng) {
+    uint32_t n = quipCount(b, pool);
     if (!order || pos >= n) {  // a fresh shuffle: a random start and a step that visits every line once
         uint32_t step;
         do step = 1 + next(rng) % (n > 1 ? n - 1 : 1);
@@ -31,12 +36,12 @@ const char* quipPick(int pool, uint32_t& order, uint16_t& pos, uint32_t& rng) {
         pos   = 0;
     }
     uint32_t start = order >> 16, step = order & 0xFFFF;
-    return pools[pool][(start + pos++ * step) % n];
+    return b.pools[pool][(start + pos++ * step) % n];
 }
 
 uint32_t quipDelayMs(uint32_t& rng) { return 180000 + next(rng) % (2700000 - 180000 + 1); }
 
-const char* quipEvent(QuipEvent e) { return events[e]; }
+const char* quipEvent(const QuipBook& b, QuipEvent e) { return e < b.nEvents ? b.events[e] : nullptr; }
 bool        quipEventOnce(uint32_t& done, QuipEvent e) {
     if (done & (1u << e)) return false;
     done |= 1u << e;

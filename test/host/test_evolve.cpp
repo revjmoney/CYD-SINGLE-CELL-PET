@@ -2,6 +2,7 @@
 #include "check.h"
 #include "evolve.h"
 #include "quips.h"
+#include "duckrules.h"
 #include <cstddef>
 #include <cstring>
 #include <string>
@@ -150,13 +151,14 @@ static void testUpgradeFromSkeletonPet() {
     CHECK(valid(s, sizeof s));
 }
 
-static void testQuipLinesFitTwoLines() {
-    bool ok = true, dashes = false;
-    for (int pool = 0; pool < QUIP_POOLS; pool++)
-        for (int i = 0; i < quipCount(pool); i++) {
-            const char* q = quipLine(pool, i);
+// every line of a book fits two lines of 38 and carries no dashes
+static void checkBookLines(const QuipBook& book, bool& ok, bool& dashes, int& total) {
+    for (int pool = 0; pool < book.nPools; pool++)
+        for (int i = 0; i < quipCount(book, pool); i++) {
+            const char* q = quipLine(book, pool, i);
             char        a[40], b[40];
             int         n = quipWrap(q, a, b);
+            total++;
             if (strlen(q) > 76 || n < 1 || n > 2 || strlen(a) > 38 || strlen(b) > 38) {
                 ok = false;
                 std::printf("  too long: %s\n", q);
@@ -164,33 +166,58 @@ static void testQuipLinesFitTwoLines() {
             if (strstr(q, " -- ") || strstr(q, "\xE2\x80\x94")) dashes = true;
         }
     for (int e = 0; e < QE_COUNT; e++) {
+        const char* q = quipEvent(book, (QuipEvent)e);
+        if (!q) continue;
         char a[40], b[40];
-        int  n = quipWrap(quipEvent((QuipEvent)e), a, b);
-        if (n < 1 || n > 2) ok = false, std::printf("  event too long: %s\n", quipEvent((QuipEvent)e));
+        int  n = quipWrap(q, a, b);
+        if (n < 1 || n > 2) ok = false, std::printf("  event too long: %s\n", q);
+        if (strstr(q, " -- ") || strstr(q, "\xE2\x80\x94")) dashes = true;
     }
+}
+
+static void testQuipLinesFitTwoLines() {
+    bool ok = true, dashes = false;
+    int  total = 0;
+    checkBookLines(cellBook, ok, dashes, total);
     CHECK(ok);
     CHECK(!dashes);
 }
 
-static void testQuipPoolsAreBig() {
-    for (int pool = 0; pool < QUIP_POOLS; pool++) CHECK(quipCount(pool) >= 20);
+static void testCellBookUnchanged() {
+    CHECK(cellBook.nPools == 6);
+    int want[6] = {20, 28, 24, 24, 24, 30};
+    for (int p = 0; p < 6; p++) CHECK(quipCount(cellBook, p) == want[p]);
+}
+
+static void testDuckBookShape() {
+    CHECK(duckBook.nPools == 7);
+    for (int p = 0; p < duckBook.nPools; p++) CHECK(quipCount(duckBook, p) >= 20);
+    bool ok = true, dashes = false;
+    int  total = 0;
+    checkBookLines(duckBook, ok, dashes, total);
+    CHECK(ok);
+    CHECK(!dashes);
+    CHECK(total >= 150);
+    for (QuipEvent e : {QE_EVIL_WIN, QE_FIRST_FROG, QE_FIRST_FISH, QE_CROWNED}) CHECK(quipEvent(duckBook, e) != nullptr);
+    CHECK(quipEvent(cellBook, QE_FIRST_FROG) == nullptr);  // the cell has no frogs
 }
 
 static void testQuipNoRepeatsUntilPoolUsedUp() {
-    for (int pool = 0; pool < QUIP_POOLS; pool++) {
-        int         n = quipCount(pool);
-        uint32_t    order = 0, rng = 7 + pool;
-        uint16_t    pos = 0;
-        std::string seen[64];
-        bool        dup = false;
-        for (int i = 0; i < n; i++) {
-            seen[i] = quipPick(pool, order, pos, rng);
-            for (int j = 0; j < i; j++) dup |= seen[j] == seen[i];
+    for (const QuipBook* book : {&cellBook, &duckBook})
+        for (int pool = 0; pool < book->nPools; pool++) {
+            int         n = quipCount(*book, pool);
+            uint32_t    order = 0, rng = 7 + pool;
+            uint16_t    pos = 0;
+            std::string seen[64];
+            bool        dup = false;
+            for (int i = 0; i < n; i++) {
+                seen[i] = quipPick(*book, pool, order, pos, rng);
+                for (int j = 0; j < i; j++) dup |= seen[j] == seen[i];
+            }
+            CHECK(!dup);
+            quipPick(*book, pool, order, pos, rng);  // the next one starts a fresh shuffle
+            CHECK(pos == 1);
         }
-        CHECK(!dup);
-        quipPick(pool, order, pos, rng);  // the next one starts a fresh shuffle
-        CHECK(pos == 1);
-    }
 }
 
 static void testQuipDelayRange() {
@@ -212,9 +239,15 @@ static void testQuipEventFiresOnce() {
 }
 
 static void testQuipPoolForStage() {
-    CHECK(quipPool(1, false) == 0);  // round one
-    CHECK(quipPool(1, true) == 1);
-    CHECK(quipPool(5, true) == 5);
+    CHECK(quipPool(1, false, false) == 0);  // round one
+    CHECK(quipPool(1, true, false) == 1);
+    CHECK(quipPool(5, true, false) == 5);
+}
+
+static void testVillainPool() {
+    CHECK(quipPool(3, true, true) == 6);
+    CHECK(quipPool(3, true, false) == 3);
+    CHECK(quipPool(1, false, true) == 0);  // round one has no villain pool
 }
 
 // the save's CRC-32 (reflected, 0xEDB88320), worked out here independently
@@ -278,6 +311,84 @@ static void testAnimClockStaysSmall() {
     CHECK_NEAR(b - a, 0.030, 0.0005);
 }
 
+static double rate(int n, bool (*f)(uint32_t&), uint32_t seed) {
+    int hit = 0;
+    for (int i = 0; i < n; i++) hit += f(seed);
+    return hit / (double)n;
+}
+
+static void testEvilOdds() {
+    uint32_t rng = 1234;
+    int      evil = 0, n = 200000;
+    bool     inRange = true;
+    for (int i = 0; i < n; i++) {
+        int k = duck::clutchEvil(rng);
+        if (k >= 0) evil++;
+        inRange &= k >= -1 && k <= 7;
+    }
+    CHECK_NEAR(evil / (double)n, 0.04, 0.003);
+    CHECK(inRange);
+    CHECK_NEAR(rate(n, duck::wildEvil, 99), 0.03, 0.003);
+    CHECK_NEAR(rate(n, duck::normalBeatsEvil, 7), 0.12, 0.005);
+}
+
+static void testEvilFightNeverKillsYourDuck() {
+    for (int i = 0; i < 8; i++) {
+        bool upset = i & 1, evilIsPet = i & 2, normalIsPet = i & 4;
+        if (evilIsPet && normalIsPet) continue;
+        duck::EvilOutcome o = duck::evilFightOutcome(upset, evilIsPet, normalIsPet);
+        CHECK(!(evilIsPet && o.evilDies));
+        CHECK(!(normalIsPet && o.normalDies));
+        CHECK(!(o.evilDies && o.normalDies));
+    }
+}
+
+static void testUpsetKillsTheEvilDuckling() {
+    duck::EvilOutcome o = duck::evilFightOutcome(true, false, false);
+    CHECK(o.evilDies);
+    CHECK(!o.normalDies);
+}
+
+static void testEvilPetEatsItsKill() {
+    duck::EvilOutcome o = duck::evilFightOutcome(false, true, false);
+    CHECK(o.normalDies);
+    CHECK(o.petEnergy == duck::EVIL_MEAL);
+    CHECK(duck::EVIL_MEAL > duck::preyEnergy(duck::FROG));
+}
+
+static void testBeatenPetLosesEnergy() {
+    CHECK(duck::evilFightOutcome(false, false, true).petEnergy < 0);
+    CHECK(duck::evilFightOutcome(true, true, false).petEnergy == 0);
+}
+
+static void testPrey() {
+    using namespace duck;
+    CHECK(preyEnergy(FROG) > preyEnergy(FISH));
+    CHECK(preyEnergy(FISH) > preyEnergy(BUG));
+    CHECK(preyEnergy(BUG) > PEAS);
+    CHECK(PEAS > WEED);
+    uint32_t rng = 5;
+    bool     ok  = true;
+    double   dark = 0, bright = 0;
+    for (int i = 0; i < 2000; i++) {
+        uint32_t d0 = preyDelayMs(BUG, 0, rng), d1 = preyDelayMs(BUG, 1, rng);
+        ok &= d0 >= 30000 / 0.6 * 0.999 && d0 <= 90000 / 0.6 * 1.001 && d1 >= 30000 / 1.4 * 0.999 && d1 <= 90000 / 1.4 * 1.001;
+        dark += d0, bright += d1;
+        uint32_t f = preyDelayMs(FROG, 0.5f, rng), g = preyDelayMs(FISH, 0.5f, rng);
+        ok &= f >= 180000 / 1.0 * 0.999 && f <= 360000 * 1.001 && g >= 120000 * 0.999 && g <= 300000 * 1.001;
+    }
+    CHECK(ok);
+    CHECK(bright < dark);  // more prey in a bright room
+}
+
+static void testDuckFlags() {
+    using namespace duck;
+    DuckFlags a = unpackFlags(packFlags({true, 0x80}));
+    CHECK(a.petEvil && a.dropEvil == 0x80);
+    DuckFlags b = unpackFlags(packFlags({false, 0}));
+    CHECK(!b.petEvil && b.dropEvil == 0);
+}
+
 int main() {
     testStages();
     testTickCarriesMilliseconds();
@@ -294,7 +405,16 @@ int main() {
     testDamagedSaveIsRejected();
     testUpgradeFromSkeletonPet();
     testQuipLinesFitTwoLines();
-    testQuipPoolsAreBig();
+    testCellBookUnchanged();
+    testDuckBookShape();
+    testVillainPool();
+    testEvilOdds();
+    testPrey();
+    testEvilFightNeverKillsYourDuck();
+    testUpsetKillsTheEvilDuckling();
+    testEvilPetEatsItsKill();
+    testBeatenPetLosesEnergy();
+    testDuckFlags();
     testQuipNoRepeatsUntilPoolUsedUp();
     testQuipDelayRange();
     testQuipEventFiresOnce();

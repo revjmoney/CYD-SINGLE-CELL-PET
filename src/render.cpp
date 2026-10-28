@@ -307,6 +307,7 @@ void drawCell(const SnapCell& k, const CellPrep& p, const SnapPet* pet) {
 }
 
 #include "bodies.inc"
+#include "ducks.inc"
 
 void drawTardigrade(const Snapshot& s) {
     float tx = s.tardX, ty = s.tardY, dir = s.tardDir, ts = s.tMs * 0.001f;
@@ -385,6 +386,10 @@ void hudLine(const Snapshot& s, int y, uint16_t* o) {
 }
 
 void prepFrame(const Snapshot& s) {
+    if (s.kind == 1) {
+        prepDucks(s, duckOrder);
+        return;
+    }
     for (int i = 0; i < s.nCells; i++) {
         const SnapCell& k = s.cells[i];
         prepCell(k, s.tMs, prep[i]);
@@ -395,13 +400,16 @@ void prepFrame(const Snapshot& s) {
 // one whole strip: the drop, everything in it, packed to RGB565, the readout on top
 void drawStrip(const Snapshot& s, int y0, uint16_t* out) {
     Y0 = y0;
-    background(s);
-    for (int i = 0; i < s.nAlgae; i++) drawAlgae(s.algae[i]);
-    drawTardigrade(s);
-    for (int i = s.nCells - 1; i >= 0; i--)
-        if (s.cells[i].role == ROLE_PET || s.cells[i].role == ROLE_CROWNED) drawPet(s.cells[i], prep[i], s.pet, s.tMs);
-        else drawCell(s.cells[i], prep[i], nullptr);
-    for (int i = 0; i < s.nBits; i++) glowDot(s.bits[i][0], s.bits[i][1], 90, 120, 60);
+    if (s.kind == 1) duckScene(s);
+    else {
+        background(s);
+        for (int i = 0; i < s.nAlgae; i++) drawAlgae(s.algae[i]);
+        drawTardigrade(s);
+        for (int i = s.nCells - 1; i >= 0; i--)
+            if (s.cells[i].role == ROLE_PET || s.cells[i].role == ROLE_CROWNED) drawPet(s.cells[i], prep[i], s.pet, s.tMs);
+            else drawCell(s.cells[i], prep[i], nullptr);
+        for (int i = 0; i < s.nBits; i++) glowDot(s.bits[i][0], s.bits[i][1], 90, 120, 60);
+    }
     if (s.banner[0][0]) {  // a sparkle drifting around the pop-up
         int   w  = max(strlen(s.banner[0]), strlen(s.banner[1])) * 8 + 24, h = s.banner[1][0] ? 44 : 28;
         float cy = bannerY(s) + h / 2 - 6, fade = s.bannerAge < 1 ? s.bannerAge : 1;

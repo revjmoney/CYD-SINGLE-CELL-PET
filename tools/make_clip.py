@@ -3,7 +3,7 @@
 """Turns the frames from tools/film.py into docs/media/cellpet.gif (for the README)
 and docs/media/cellpet.mp4, with ffmpeg on PATH.
 
-usage: python -I tools/make_clip.py build/film
+usage: python -I tools/make_clip.py build/film [name]   (name: cellpet (default) or duckpet)
 """
 import glob
 import os
@@ -13,6 +13,7 @@ import sys
 import tempfile
 
 src = sys.argv[1]
+name = sys.argv[2] if len(sys.argv) > 2 else "cellpet"
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 media = os.path.join(root, "docs", "media")
 os.makedirs(media, exist_ok=True)
@@ -25,8 +26,8 @@ try:
     for i, f in enumerate(frames):
         shutil.copy(f, os.path.join(tmp, f"f{i:04d}.png"))
     seq = os.path.join(tmp, "f%04d.png")
-    gif = os.path.join(media, "cellpet.gif")
-    mp4 = os.path.join(media, "cellpet.mp4")
+    gif = os.path.join(media, name + ".gif")
+    mp4 = os.path.join(media, name + ".mp4")
     # 20 fps is true speed (each frame is one 50 ms step); the GIF uses one palette built from the whole clip
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", "20", "-i", seq, "-vf",
                     "split[a][b];[a]palettegen=max_colors=192:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=4",

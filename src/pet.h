@@ -12,6 +12,11 @@ constexpr int LW = 160, LH = 120;  // half size: the lamp table
 constexpr int STRIP = 16;          // lines per DMA strip
 constexpr int LSIZE = LW * LH;     // one colour plane
 
+// which pet this board runs: picked at boot (PET_DEFAULT, or the PET setting when built with PET_SWITCH)
+enum class Kind : uint8_t { Cell, Duck };
+extern Kind petKind;
+extern bool splatterRed;  // Duck Pet: red splatter (the default) or dark feathers only
+
 extern const uint8_t* font16;  // IBM VGA 8x16
 
 static inline uint16_t rgb(int r, int g, int b) {  // byte-swapped RGB565, ready for the panel

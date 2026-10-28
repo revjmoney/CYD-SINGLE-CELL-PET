@@ -31,6 +31,25 @@ struct SnapAlgae {
     uint8_t n, fed;
 };
 
+// Duck Pet's pond (kind 1)
+enum DuckRole : uint8_t { DUCKLING, DUCK_PET, DUCK_CROWNED };
+enum DuckLook : uint8_t { LOOK_SLEEP = 1, LOOK_STARTLED = 2, LOOK_QUACK = 4, LOOK_PREEN = 8 };
+struct SnapDuck {
+    int16_t x, y;
+    float   size, face, bob, dabble, flap, alpha, calm;  // face: +1 right, -1 left (blends while turning)
+    uint8_t role, look, stage, evil;
+};
+struct SnapPrey {
+    int16_t x, y;
+    uint8_t type;  // duck::Prey
+    float   phase, depth;  // depth 0 at the surface, 1 deep (a goldfish fades)
+};
+struct SnapSplat {
+    int16_t x, y;
+    uint8_t red;  // 0: a dark feather instead
+    float   life;
+};
+
 struct Snapshot {
     uint32_t  tMs;
     float     light;
@@ -46,6 +65,16 @@ struct Snapshot {
     float     bannerAge;  // seconds it has been showing
     bool      desk, showBars;
     float     hp01, food01;
+    // Duck Pet only
+    uint8_t   kind;  // 0 Cell Pet, 1 Duck Pet
+    int       nDucks, nPrey, nFood, nSplat;
+    SnapDuck  ducks[16];
+    SnapPrey  prey[8];
+    int16_t   food[32][2];
+    uint8_t   foodType[32];  // 0 duckweed, 1 peas and oats
+    SnapSplat splat[64];
+    float     turtleX, turtleY, turtleDir;
+    bool      splatterRed;
 };
 
 Snapshot*       snapWrite();    // a copy nobody is reading; fill all of it

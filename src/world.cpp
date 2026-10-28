@@ -384,14 +384,14 @@ struct World {
         }
         if (crownT > 0) return;  // the crowning has the screen
         if (nQueued) {
-            show(quipEvent(queued[0]));
+            if (const char* q = quipEvent(cellBook, queued[0])) show(q);
             memmove(queued, queued + 1, --nQueued * sizeof queued[0]);
             return;
         }
         if ((int32_t)(now - quipAt) < 0) return;
-        int pool = quipPool(s.body.stage, s.havePet);
+        int pool = quipPool(s.body.stage, s.havePet, false);
         if (pool != s.quipPool) s.quipPool = pool, s.quipOrder = 0, s.quipPos = 0;  // a new stage: a new pool
-        show(quipPick(pool, s.quipOrder, s.quipPos, rng));
+        show(quipPick(cellBook, pool, s.quipOrder, s.quipPos, rng));
         quipAt = now + quipDelayMs(rng);
     }
 
@@ -588,6 +588,7 @@ struct World {
     void publish(uint32_t t) {
         Snapshot& o = *snapWrite();
         o.tMs = evo::animMs(t), o.light = light, o.desk = deskClock, o.showBars = s.havePet;
+        o.kind = 0, o.nDucks = o.nPrey = o.nFood = o.nSplat = 0;
         o.hp01 = s.havePet ? c[0].hp / maxHp(c[0]) : 0, o.food01 = s.energy / 100;
         o.nCells = 0;
         for (int i = 0; i < NCELL && o.nCells < 16; i++) {
