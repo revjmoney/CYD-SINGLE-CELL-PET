@@ -7,8 +7,7 @@
 
 namespace cp {
 
-// ns: "pet2" for Cell Pet (which may bring the old skeleton pet across), "duck1" for Duck Pet
-evo::Save petLoad(const char* ns = "pet2");
-void      petStore(evo::Save& s, const char* ns = "pet2");
+evo::Save petLoad();
+void      petStore(evo::Save& s);
 
 }  // namespace cp
